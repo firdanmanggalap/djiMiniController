@@ -6,6 +6,33 @@ Dibangun di atas script CLI asli (`main.py`) dengan tambahan UI: auto-detect por
 
 ---
 
+## ▶️ Cara Run (Quick Start — Windows)
+
+> ⚠️ Install **ViGEmBus** dulu (sekali aja): https://github.com/nefarius/ViGEmBus/releases
+
+**1. Setup (sekali pertama):**
+```bash
+git clone https://github.com/firdanmanggalap/djiminicontroller.git
+cd djiminicontroller
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**2. Run (tiap mau dipakai):**
+```bash
+cd djiminicontroller
+.venv\Scripts\activate
+python app.py
+```
+
+3. **Colok remote DJI** lewat USB → aplikasi otomatis nyari & nyambung (status pojok kanan atas jadi hijau **"● Connected — COMx"**). Buka game/simulator, controller udah kebaca sebagai Xbox 360.
+
+> Kalau pakai **PowerShell** dan kena error execution policy pas `activate`, jalankan: `Set-ExecutionPolicy -Scope Process RemoteSigned` lalu ulangi. Atau pakai Command Prompt (cmd).
+> Belum kepasang ViGEmBus? Aplikasi tetap kebuka tapi kasih dialog peringatan, dan output gamepad nggak aktif sampai ViGEmBus diinstall.
+
+---
+
 ## ✨ Fitur
 
 | | Fitur |
