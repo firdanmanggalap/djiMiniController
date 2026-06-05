@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt
 
 from .widgets.analog_stick import AnalogStick
 from .mapping import convert_axis, convert_camera
-from .config import save, AXIS_NAMES
+from .config import save, AXIS_NAMES, default_axes
 from .gamepad_out import GamepadOut
 from .serial_link import SerialLink
 from .logger import LogBuffer
@@ -18,13 +18,20 @@ from .logger import LogBuffer
 AXIS_LABELS = {"lv": "L-Vert", "lh": "L-Horz", "rv": "R-Vert",
                "rh": "R-Horz", "cam": "Camera"}
 
+_LOG_FILE = "session.log"
+
+
+def _undo_invert(v: int, cal) -> int:
+    """Undo output inversion so the display shows the physical stick direction."""
+    return -v if cal.invert else v
+
 
 class MainWindow(QMainWindow):
     def __init__(self, config, gamepad=None, link=None, autostart=True):
         super().__init__()
         self.config = config
         self.gamepad = gamepad or GamepadOut()
-        self.logbuf = LogBuffer(file_path=("session.log" if config.log_to_file else None))
+        self.logbuf = LogBuffer(file_path=(_LOG_FILE if config.log_to_file else None))
         self.setWindowTitle("DJI Mini -> Xbox Controller")
 
         self._build_ui()
@@ -163,19 +170,14 @@ class MainWindow(QMainWindow):
                 for n in ("lv", "lh", "rv", "rh")}
         trig = convert_camera(axes["cam"], self.config.axes["cam"])
 
-        def _vis(v, cal):
-            return v * (-1 if cal.invert else 1)
+        # Display the PHYSICAL stick position; invert only affects gamepad output.
+        phys = {n: _undo_invert(vals[n], self.config.axes[n])
+                for n in ("lv", "lh", "rv", "rh")}
 
-        self.left_stick.set_position(
-            _vis(vals["lh"], self.config.axes["lh"]) / 32767,
-            _vis(vals["lv"], self.config.axes["lv"]) / 32767,
-        )
-        self.right_stick.set_position(
-            _vis(vals["rh"], self.config.axes["rh"]) / 32767,
-            _vis(vals["rv"], self.config.axes["rv"]) / 32767,
-        )
-        self.left_vals.setText(f"H {vals['lh']:+d}  V {vals['lv']:+d}")
-        self.right_vals.setText(f"H {vals['rh']:+d}  V {vals['rv']:+d}")
+        self.left_stick.set_position(phys["lh"] / 32767, phys["lv"] / 32767)
+        self.right_stick.set_position(phys["rh"] / 32767, phys["rv"] / 32767)
+        self.left_vals.setText(f"H {phys['lh']:+d}  V {phys['lv']:+d}")
+        self.right_vals.setText(f"H {phys['rh']:+d}  V {phys['rv']:+d}")
         self.cam_bar.setValue(trig)
 
         if self.config.output_enabled and self._gamepad_ready:
@@ -210,13 +212,18 @@ class MainWindow(QMainWindow):
         self._save()
 
     def _reset_calibration(self):
-        from .config import default_axes
         self.config.axes = default_axes()
         for name in AXIS_NAMES:
             c = self.config.axes[name]
+            widgets = (self._invert_boxes[name], self._deadzone_sliders[name],
+                       self._trim_sliders[name])
+            for w in widgets:
+                w.blockSignals(True)
             self._invert_boxes[name].setChecked(c.invert)
             self._deadzone_sliders[name].setValue(int(c.deadzone * 100))
             self._trim_sliders[name].setValue(c.trim)
+            for w in widgets:
+                w.blockSignals(False)
         self._save()
 
     def _toggle_output(self):
@@ -231,7 +238,7 @@ class MainWindow(QMainWindow):
 
     def _enable_log_file(self):
         self.config.log_to_file = True
-        self.logbuf.set_file("session.log")
+        self.logbuf.set_file(_LOG_FILE)
         self._save()
         self._log("info", "Log disimpan ke session.log")
 

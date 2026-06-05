@@ -1,3 +1,5 @@
+import pytest
+
 from PySide6.QtCore import QObject, Signal
 
 from dji_xbox.main_window import MainWindow
@@ -63,3 +65,50 @@ def test_status_updates_pill_text(qapp):
     win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
     win.on_status("connected", "COM3")
     assert "COM3" in win.status_label.text()
+
+
+def test_value_labels_show_physical_direction(qapp):
+    win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    win.on_raw_axes({"lv": 1684, "lh": 1024, "rv": 1024, "rh": 1024, "cam": 1024})
+    # lv pushed physically up -> label V must read positive (matches the dot),
+    # even though lv defaults to invert=True for output.
+    assert "V +" in win.left_vals.text()
+
+
+def test_invert_toggle_updates_config_and_saves(qapp, monkeypatch):
+    saved = []
+    monkeypatch.setattr("dji_xbox.main_window.save", lambda cfg, *a, **k: saved.append(cfg))
+    win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    win._invert_boxes["lh"].setChecked(True)
+    assert win.config.axes["lh"].invert is True
+    assert saved  # _save was triggered by the toggle
+
+
+def test_deadzone_slider_updates_config(qapp, monkeypatch):
+    monkeypatch.setattr("dji_xbox.main_window.save", lambda *a, **k: None)
+    win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    win._deadzone_sliders["rv"].setValue(20)
+    assert abs(win.config.axes["rv"].deadzone - 0.20) < 1e-9
+
+
+def test_reset_saves_only_once(qapp, monkeypatch):
+    saves = []
+    monkeypatch.setattr("dji_xbox.main_window.save", lambda *a, **k: saves.append(1))
+    win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    saves.clear()
+    win._reset_calibration()
+    assert len(saves) == 1  # blockSignals prevents per-widget save storm
+
+
+def test_toggle_output_updates_config(qapp, monkeypatch):
+    monkeypatch.setattr("dji_xbox.main_window.save", lambda *a, **k: None)
+    win = MainWindow(AppConfig(output_enabled=True), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    win.output_btn.setChecked(False)
+    win._toggle_output()
+    assert win.config.output_enabled is False
+
+
+def test_on_stats_updates_hz_label(qapp):
+    win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    win.on_stats(91.0, 11.0, 3)
+    assert "91" in win.hz_label.text()
