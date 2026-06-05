@@ -12,12 +12,20 @@ from .lag_detector import LagDetector
 BAUD = 115200
 
 
-def probe_port(ser, ping: bytes = PING_DATA) -> bool:
-    """Write the ping and return True if the device replies with a full frame."""
+def probe_port(ser, ping: bytes = PING_DATA, attempts: int = 8) -> bool:
+    """Ping a few times; return True if the device replies with a full 38-byte frame.
+
+    The remote may need several pings before it answers, and the first read after
+    opening often catches a partial (mid-stream) frame, so we retry instead of
+    giving up on a single read.
+    """
     ser.reset_input_buffer()
-    ser.write(ping)
-    data = ser.readline()
-    return len(data) == PACKET_LEN
+    for _ in range(attempts):
+        ser.write(ping)
+        data = ser.readline()
+        if len(data) == PACKET_LEN:
+            return True
+    return False
 
 
 class SerialLink(QThread):
@@ -32,6 +40,7 @@ class SerialLink(QThread):
         self._port_hint = port_hint
         self._serial = None
         self._last_stats_emit = 0.0
+        self._last_candidates = None
 
     def stop(self):
         self._running = False
@@ -53,22 +62,38 @@ class SerialLink(QThread):
         return ports
 
     def _find_port(self):
-        for dev in self._candidate_ports():
+        candidates = self._candidate_ports()
+        # Only log scan details when the set of ports changes, so a failing
+        # 1s scan loop doesn't flood the log.
+        verbose = candidates != self._last_candidates
+        self._last_candidates = candidates
+        if verbose:
+            self.log.emit("info",
+                          f"Scan port: {', '.join(candidates)}" if candidates
+                          else "Tidak ada COM port terdeteksi")
+        for dev in candidates:
             if not self._running:
                 break
             try:
                 ser = serial.Serial(port=dev, baudrate=BAUD, timeout=0.3)
-            except (serial.SerialException, OSError):
+            except (serial.SerialException, OSError) as e:
+                if verbose:
+                    self.log.emit("warn", f"{dev}: gagal dibuka ({e})")
                 continue
             claimed = False
             try:
+                if verbose:
+                    self.log.emit("info", f"{dev}: cek remote DJI…")
                 if probe_port(ser):
                     self.log.emit("ok", f"{dev} balas paket 38-byte -> remote DJI")
                     self._serial = ser
                     claimed = True
                     return dev
-            except (serial.SerialException, OSError):
-                pass
+                if verbose:
+                    self.log.emit("info", f"{dev}: bukan remote DJI, skip")
+            except (serial.SerialException, OSError) as e:
+                if verbose:
+                    self.log.emit("warn", f"{dev}: error saat probe ({e})")
             finally:
                 if not claimed:
                     try:
