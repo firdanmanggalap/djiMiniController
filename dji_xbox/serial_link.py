@@ -54,21 +54,27 @@ class SerialLink(QThread):
 
     def _find_port(self):
         for dev in self._candidate_ports():
+            if not self._running:
+                break
             try:
                 ser = serial.Serial(port=dev, baudrate=BAUD, timeout=0.3)
-            except serial.SerialException:
+            except (serial.SerialException, OSError):
                 continue
+            claimed = False
             try:
                 if probe_port(ser):
                     self.log.emit("ok", f"{dev} balas paket 38-byte -> remote DJI")
                     self._serial = ser
+                    claimed = True
                     return dev
-            except serial.SerialException:
+            except (serial.SerialException, OSError):
                 pass
-            try:
-                ser.close()
-            except serial.SerialException:
-                pass
+            finally:
+                if not claimed:
+                    try:
+                        ser.close()
+                    except (serial.SerialException, OSError):
+                        pass
         return None
 
     def _stream(self, port):
@@ -93,11 +99,11 @@ class SerialLink(QThread):
                     self._last_stats_emit = t
                 if ev is not None:
                     self.log.emit("warn", ev.message)
-        except serial.SerialException as e:
+        except (serial.SerialException, OSError) as e:
             self.log.emit("err", f"{port} hilang: {e} - reconnect...")
         finally:
             try:
                 ser.close()
-            except serial.SerialException:
+            except (serial.SerialException, OSError):
                 pass
             self.status.emit("disconnected", port)
