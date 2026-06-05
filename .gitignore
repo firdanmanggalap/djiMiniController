@@ -5,3 +5,4 @@ config.json
 session.log
 .superpowers/
 .pytest_cache/
+docs/
