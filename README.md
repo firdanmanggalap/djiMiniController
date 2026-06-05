@@ -9,26 +9,28 @@ Built on top of the original CLI script (`main.py`), with a UI added: auto port 
 ## ▶️ Quick Start (Windows)
 
 > ⚠️ Install **ViGEmBus** first (one time only): https://github.com/nefarius/ViGEmBus/releases
+> You also need **Python 3.10+** installed (tick *"Add Python to PATH"* during install).
 
-**1. Setup (first time):**
+### Easiest — double-click `run.bat`
 ```bash
-git clone https://github.com/firdanmanggalap/djiminicontroller.git
-cd djiminicontroller
+git clone https://github.com/firdanmanggalap/djiMiniController.git
+cd djiMiniController
+```
+Then just **double-click `run.bat`**. The first run auto-creates the virtual environment and installs dependencies; every run after that just launches the app — no need to "activate" anything.
+
+Plug in the DJI remote via USB → it connects automatically (the status chip at the top-right turns green: **"● Connected — COMx"**). Open your game/simulator and the controller shows up as an Xbox 360 pad.
+
+### Or run it manually
+```bash
+git clone https://github.com/firdanmanggalap/djiMiniController.git
+cd djiMiniController
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-**2. Run (every time you use it):**
-```bash
-cd djiminicontroller
-.venv\Scripts\activate
 python app.py
 ```
 
-3. **Plug in the DJI remote** via USB → the app finds and connects automatically (the status chip at the top-right turns green: **"● Connected — COMx"**). Open your game/simulator and the controller is recognized as an Xbox 360 pad.
-
-> If you use **PowerShell** and hit an execution-policy error on `activate`, run: `Set-ExecutionPolicy -Scope Process RemoteSigned` and try again — or just use Command Prompt (cmd).
+> If PowerShell blocks `activate` with an execution-policy error, run `Set-ExecutionPolicy -Scope Process RemoteSigned` and retry — or use Command Prompt (cmd). *(Not needed if you use `run.bat`.)*
 > ViGEmBus not installed yet? The app still opens but shows a warning dialog, and gamepad output stays off until ViGEmBus is installed.
 
 ---
