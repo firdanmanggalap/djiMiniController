@@ -1,6 +1,7 @@
 """Main window: header, live sticks, calibration grid, log panel — wires it all."""
 
 import time
+from dataclasses import replace
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
@@ -42,6 +43,14 @@ class MainWindow(QMainWindow):
             self._gamepad_ready = True
         except Exception as e:  # vgamepad/ViGEmBus missing
             self._log("err", f"ViGEmBus belum siap: {e}")
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "ViGEmBus belum siap",
+                "Output Xbox tidak aktif karena ViGEmBus/vgamepad belum terpasang.\n"
+                "Install ViGEmBus, lalu jalankan ulang aplikasi.\n\n"
+                f"Detail: {e}",
+            )
 
         self.link = link or SerialLink(port_hint=config.port_hint)
         self.link.rawAxes.connect(self.on_raw_axes)
@@ -106,9 +115,11 @@ class MainWindow(QMainWindow):
         cal.addWidget(QLabel("Invert"), 0, 1)
         cal.addWidget(QLabel("Deadzone"), 0, 2)
         cal.addWidget(QLabel("Trim"), 0, 3)
+        cal.addWidget(QLabel("Range"), 0, 4)
         self._invert_boxes = {}
         self._deadzone_sliders = {}
         self._trim_sliders = {}
+        self._range_sliders = {}
         for row, name in enumerate(AXIS_NAMES, start=1):
             c = self.config.axes[name]
             cal.addWidget(QLabel(AXIS_LABELS[name]), row, 0)
@@ -133,9 +144,16 @@ class MainWindow(QMainWindow):
             cal.addWidget(tr, row, 3)
             self._trim_sliders[name] = tr
 
+            rg = QSlider(Qt.Horizontal)
+            rg.setRange(50, 150)               # 0.50 .. 1.50
+            rg.setValue(int(round(c.range * 100)))
+            rg.valueChanged.connect(lambda v, n=name: self._set_range(n, v))
+            cal.addWidget(rg, row, 4)
+            self._range_sliders[name] = rg
+
         reset = QPushButton("↺ Reset")
         reset.clicked.connect(self._reset_calibration)
-        cal.addWidget(reset, len(AXIS_NAMES) + 1, 0, 1, 4)
+        cal.addWidget(reset, len(AXIS_NAMES) + 1, 0, 1, 5)
 
         cal_widget = QWidget()
         cal_widget.setLayout(cal)
@@ -168,7 +186,9 @@ class MainWindow(QMainWindow):
     def on_raw_axes(self, axes: dict):
         vals = {n: convert_axis(axes[n], self.config.axes[n])
                 for n in ("lv", "lh", "rv", "rh")}
-        trig = convert_camera(axes["cam"], self.config.axes["cam"])
+        cam_cal = self.config.axes["cam"]
+        trig = convert_camera(axes["cam"], cam_cal)                       # gamepad output
+        cam_disp = convert_camera(axes["cam"], replace(cam_cal, invert=False))  # physical bar
 
         # Display the PHYSICAL stick position; invert only affects gamepad output.
         phys = {n: _undo_invert(vals[n], self.config.axes[n])
@@ -178,7 +198,7 @@ class MainWindow(QMainWindow):
         self.right_stick.set_position(phys["rh"] / 32767, phys["rv"] / 32767)
         self.left_vals.setText(f"H {phys['lh']:+d}  V {phys['lv']:+d}")
         self.right_vals.setText(f"H {phys['rh']:+d}  V {phys['rv']:+d}")
-        self.cam_bar.setValue(trig)
+        self.cam_bar.setValue(cam_disp)
 
         if self.config.output_enabled and self._gamepad_ready:
             self.gamepad.send(vals["lv"], vals["lh"], vals["rv"], vals["rh"], trig)
@@ -211,17 +231,22 @@ class MainWindow(QMainWindow):
         self.config.axes[name].trim = int(value)
         self._save()
 
+    def _set_range(self, name, value):
+        self.config.axes[name].range = value / 100.0
+        self._save()
+
     def _reset_calibration(self):
         self.config.axes = default_axes()
         for name in AXIS_NAMES:
             c = self.config.axes[name]
             widgets = (self._invert_boxes[name], self._deadzone_sliders[name],
-                       self._trim_sliders[name])
+                       self._trim_sliders[name], self._range_sliders[name])
             for w in widgets:
                 w.blockSignals(True)
             self._invert_boxes[name].setChecked(c.invert)
             self._deadzone_sliders[name].setValue(int(c.deadzone * 100))
             self._trim_sliders[name].setValue(c.trim)
+            self._range_sliders[name].setValue(int(round(c.range * 100)))
             for w in widgets:
                 w.blockSignals(False)
         self._save()

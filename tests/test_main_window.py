@@ -112,3 +112,28 @@ def test_on_stats_updates_hz_label(qapp):
     win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
     win.on_stats(91.0, 11.0, 3)
     assert "91" in win.hz_label.text()
+
+
+def test_range_slider_updates_config(qapp, monkeypatch):
+    monkeypatch.setattr("dji_xbox.main_window.save", lambda *a, **k: None)
+    win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    win._range_sliders["lv"].setValue(150)
+    assert abs(win.config.axes["lv"].range - 1.5) < 1e-9
+
+
+def test_camera_bar_shows_physical_direction(qapp):
+    cfg = AppConfig()
+    cfg.axes["cam"].invert = True
+    win = MainWindow(cfg, gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    win.on_raw_axes({"lv": 1024, "lh": 1024, "rv": 1024, "rh": 1024, "cam": 1684})
+    # camera dial physically at max -> bar near full, regardless of invert
+    assert win.cam_bar.value() > 200
+
+
+def test_reset_resets_range_slider(qapp, monkeypatch):
+    monkeypatch.setattr("dji_xbox.main_window.save", lambda *a, **k: None)
+    win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    win._range_sliders["lv"].setValue(150)
+    win._reset_calibration()
+    assert win._range_sliders["lv"].value() == 100   # back to range 1.0
+    assert abs(win.config.axes["lv"].range - 1.0) < 1e-9
