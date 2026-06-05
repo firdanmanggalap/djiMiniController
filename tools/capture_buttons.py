@@ -12,6 +12,7 @@ Run it from the project root:
 Then follow the prompts. Copy the "byte[..]" lines it prints and send them back.
 """
 
+import argparse
 import os
 import sys
 import time
@@ -91,10 +92,27 @@ def probe_button(label, base, s):
 
 
 def main():
-    s, dev = find_port()
-    if s is None:
-        print("Remote not found. Plug it in (and power it on) and try again.")
-        return
+    ap = argparse.ArgumentParser(description="Locate the PHOTO/RECORD button bits.")
+    ap.add_argument("-p", "--port",
+                    help="Serial port (e.g. COM6). Omit to auto-detect.")
+    args = ap.parse_args()
+
+    if args.port:
+        try:
+            s, dev = serial.Serial(args.port, BAUD, timeout=0.3), args.port
+        except Exception as e:
+            print(f"Could not open {args.port}: {e}")
+            print("If the main app is open, CLOSE it first — only one program can "
+                  "use the port at a time.")
+            return
+    else:
+        s, dev = find_port()
+        if s is None:
+            print("Remote not found by auto-scan.")
+            print("Most likely the main app is still running and holding the port —")
+            print("close it, then re-run. Or point the tool at the port directly:")
+            print("   .venv\\Scripts\\python tools\\capture_buttons.py --port COM6")
+            return
     print(f"Connected on {dev}.")
     input("\n>> Release ALL buttons, keep sticks centered, then press Enter... ")
     base, frames = capture_stable(s)
