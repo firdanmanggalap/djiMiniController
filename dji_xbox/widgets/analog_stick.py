@@ -1,5 +1,7 @@
 """Custom QWidget: a round stick pad with crosshair and a live dot."""
 
+import math
+
 from PySide6.QtWidgets import QWidget
 from PySide6.QtGui import QPainter, QColor, QPen
 from PySide6.QtCore import Qt, QPointF
@@ -33,9 +35,17 @@ class AnalogStick(QWidget):
         p.drawLine(QPointF(cx, cy - r), QPointF(cx, cy + r))
         p.drawLine(QPointF(cx - r, cy), QPointF(cx + r, cy))
 
-        dx = cx + self.x * r
-        dy = cy - self.y * r   # screen y is inverted
+        # Constrain the dot to the circular pad (not the square bounding box),
+        # and keep the whole dot inside the ring.
+        dot_r = 10
+        track = r - dot_r
+        x, y = self.x, self.y
+        mag = math.hypot(x, y)
+        if mag > 1.0:
+            x, y = x / mag, y / mag
+        dx = cx + x * track
+        dy = cy - y * track   # screen y is inverted
         p.setPen(Qt.NoPen)
         p.setBrush(QColor("#4ade80"))
-        p.drawEllipse(QPointF(dx, dy), 10, 10)
+        p.drawEllipse(QPointF(dx, dy), dot_r, dot_r)
         p.end()

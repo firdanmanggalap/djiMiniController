@@ -1,7 +1,6 @@
 """Main window: header, live sticks, calibration grid, log panel — wires it all."""
 
 import time
-from dataclasses import replace
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
@@ -22,11 +21,6 @@ AXIS_LABELS = {"lv": "L-Vert", "lh": "L-Horz", "rv": "R-Vert",
 _LOG_FILE = "session.log"
 
 
-def _undo_invert(v: int, cal) -> int:
-    """Undo output inversion so the display shows the physical stick direction."""
-    return -v if cal.invert else v
-
-
 class MainWindow(QMainWindow):
     def __init__(self, config, gamepad=None, link=None, autostart=True):
         super().__init__()
@@ -42,14 +36,14 @@ class MainWindow(QMainWindow):
             self.gamepad.open()
             self._gamepad_ready = True
         except Exception as e:  # vgamepad/ViGEmBus missing
-            self._log("err", f"ViGEmBus belum siap: {e}")
+            self._log("err", f"ViGEmBus not ready: {e}")
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self,
-                "ViGEmBus belum siap",
-                "Output Xbox tidak aktif karena ViGEmBus/vgamepad belum terpasang.\n"
-                "Install ViGEmBus, lalu jalankan ulang aplikasi.\n\n"
-                f"Detail: {e}",
+                "ViGEmBus not ready",
+                "Xbox output is disabled because ViGEmBus/vgamepad isn't installed.\n"
+                "Install ViGEmBus, then restart the app.\n\n"
+                f"Details: {e}",
             )
 
         self.link = link or SerialLink(port_hint=config.port_hint)
@@ -70,7 +64,7 @@ class MainWindow(QMainWindow):
         title = QLabel("🛩️ DJI Mini → Xbox Controller")
         title.setStyleSheet("font-weight:700;font-size:14px")
         self.hz_label = QLabel("⟳ 0 Hz")
-        self.status_label = QLabel("Mencari remote…")
+        self.status_label = QLabel("Searching for remote…")
         self.output_btn = QPushButton("Output: ON" if self.config.output_enabled
                                       else "Output: OFF")
         self.output_btn.setCheckable(True)
@@ -103,7 +97,7 @@ class MainWindow(QMainWindow):
         sticks.addLayout(left_col)
         sticks.addLayout(right_col)
         live.addLayout(sticks)
-        live.addWidget(QLabel("Dial Kamera → Right Trigger"))
+        live.addWidget(QLabel("Camera Dial → Right Trigger"))
         self.cam_bar = QProgressBar()
         self.cam_bar.setRange(0, 255)
         live.addWidget(self.cam_bar)
@@ -162,13 +156,13 @@ class MainWindow(QMainWindow):
 
         # log panel
         log_header = QHBoxLayout()
-        log_header.addWidget(QLabel("Log live (deteksi lag)"))
+        log_header.addWidget(QLabel("Live log (lag detection)"))
         log_header.addStretch()
         self.pause_btn = QPushButton("Pause")
         self.pause_btn.setCheckable(True)
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self._clear_log)
-        save_log_btn = QPushButton("💾 Simpan ke file")
+        save_log_btn = QPushButton("💾 Save to file")
         save_log_btn.clicked.connect(self._enable_log_file)
         log_header.addWidget(self.pause_btn)
         log_header.addWidget(clear_btn)
@@ -184,29 +178,25 @@ class MainWindow(QMainWindow):
 
     # ---------- slots ----------
     def on_raw_axes(self, axes: dict):
+        # Both the display (dot + H/V values) and the gamepad output use the
+        # calibrated value, so toggling Invert is immediately visible.
         vals = {n: convert_axis(axes[n], self.config.axes[n])
                 for n in ("lv", "lh", "rv", "rh")}
-        cam_cal = self.config.axes["cam"]
-        trig = convert_camera(axes["cam"], cam_cal)                       # gamepad output
-        cam_disp = convert_camera(axes["cam"], replace(cam_cal, invert=False))  # physical bar
+        trig = convert_camera(axes["cam"], self.config.axes["cam"])
 
-        # Display the PHYSICAL stick position; invert only affects gamepad output.
-        phys = {n: _undo_invert(vals[n], self.config.axes[n])
-                for n in ("lv", "lh", "rv", "rh")}
-
-        self.left_stick.set_position(phys["lh"] / 32767, phys["lv"] / 32767)
-        self.right_stick.set_position(phys["rh"] / 32767, phys["rv"] / 32767)
-        self.left_vals.setText(f"H {phys['lh']:+d}  V {phys['lv']:+d}")
-        self.right_vals.setText(f"H {phys['rh']:+d}  V {phys['rv']:+d}")
-        self.cam_bar.setValue(cam_disp)
+        self.left_stick.set_position(vals["lh"] / 32767, vals["lv"] / 32767)
+        self.right_stick.set_position(vals["rh"] / 32767, vals["rv"] / 32767)
+        self.left_vals.setText(f"H {vals['lh']:+d}  V {vals['lv']:+d}")
+        self.right_vals.setText(f"H {vals['rh']:+d}  V {vals['rv']:+d}")
+        self.cam_bar.setValue(trig)
 
         if self.config.output_enabled and self._gamepad_ready:
             self.gamepad.send(vals["lv"], vals["lh"], vals["rv"], vals["rh"], trig)
 
     def on_status(self, state: str, port: str):
-        text = {"searching": "Mencari remote…",
+        text = {"searching": "Searching for remote…",
                 "connected": f"● Connected — {port}",
-                "disconnected": f"Terputus ({port}), reconnect…"}.get(state, state)
+                "disconnected": f"Disconnected ({port}), reconnecting…"}.get(state, state)
         self.status_label.setText(text)
 
     def on_stats(self, hz: float, interval_ms: float, drops: int):
@@ -265,7 +255,7 @@ class MainWindow(QMainWindow):
         self.config.log_to_file = True
         self.logbuf.set_file(_LOG_FILE)
         self._save()
-        self._log("info", "Log disimpan ke session.log")
+        self._log("info", "Logging to session.log")
 
     def _save(self):
         save(self.config)

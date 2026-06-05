@@ -69,8 +69,8 @@ class SerialLink(QThread):
         self._last_candidates = candidates
         if verbose:
             self.log.emit("info",
-                          f"Scan port: {', '.join(candidates)}" if candidates
-                          else "Tidak ada COM port terdeteksi")
+                          f"Scanning ports: {', '.join(candidates)}" if candidates
+                          else "No COM ports detected")
         for dev in candidates:
             if not self._running:
                 break
@@ -78,22 +78,22 @@ class SerialLink(QThread):
                 ser = serial.Serial(port=dev, baudrate=BAUD, timeout=0.3)
             except (serial.SerialException, OSError) as e:
                 if verbose:
-                    self.log.emit("warn", f"{dev}: gagal dibuka ({e})")
+                    self.log.emit("warn", f"{dev}: failed to open ({e})")
                 continue
             claimed = False
             try:
                 if verbose:
-                    self.log.emit("info", f"{dev}: cek remote DJI…")
+                    self.log.emit("info", f"{dev}: checking for DJI remote…")
                 if probe_port(ser):
-                    self.log.emit("ok", f"{dev} balas paket 38-byte -> remote DJI")
+                    self.log.emit("ok", f"{dev} replied with a 38-byte frame -> DJI remote")
                     self._serial = ser
                     claimed = True
                     return dev
                 if verbose:
-                    self.log.emit("info", f"{dev}: bukan remote DJI, skip")
+                    self.log.emit("info", f"{dev}: not the DJI remote, skipping")
             except (serial.SerialException, OSError) as e:
                 if verbose:
-                    self.log.emit("warn", f"{dev}: error saat probe ({e})")
+                    self.log.emit("warn", f"{dev}: probe error ({e})")
             finally:
                 if not claimed:
                     try:
@@ -114,7 +114,7 @@ class SerialLink(QThread):
                 t = time.monotonic()
                 if len(data) != PACKET_LEN:
                     if data:
-                        self.log.emit("warn", f"paket {len(data)} byte di-skip")
+                        self.log.emit("warn", f"skipped {len(data)}-byte packet")
                     continue
                 self.rawAxes.emit(parse_packet(data))
                 ev = detector.record(t)
@@ -125,7 +125,7 @@ class SerialLink(QThread):
                 if ev is not None:
                     self.log.emit("warn", ev.message)
         except (serial.SerialException, OSError) as e:
-            self.log.emit("err", f"{port} hilang: {e} - reconnect...")
+            self.log.emit("err", f"{port} lost: {e} - reconnecting...")
         finally:
             try:
                 ser.close()
