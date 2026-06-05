@@ -4,7 +4,9 @@ from PySide6.QtCore import QObject, Signal
 
 from dji_xbox.main_window import MainWindow
 from dji_xbox.config import AppConfig
-from dji_xbox.gamepad_out import GamepadOut
+from dji_xbox.gamepad_out import GamepadOut, BUTTON_NAMES
+
+_BTN_MAP = {n: n for n in BUTTON_NAMES}
 
 
 class FakeLink(QObject):
@@ -36,6 +38,12 @@ class FakePad:
 
     def right_trigger(self, value):
         self.calls.append(("trigger", value))
+
+    def press_button(self, button):
+        self.calls.append(("press", button))
+
+    def release_button(self, button):
+        self.calls.append(("release", button))
 
     def update(self):
         self.calls.append(("update",))
@@ -137,6 +145,40 @@ def test_camera_bar_reflects_output(qapp):
     win.on_raw_axes({"lv": 1024, "lh": 1024, "rv": 1024, "rh": 1024, "cam": 1684})
     # camera dial at max -> trigger bar near full
     assert win.cam_bar.value() > 200
+
+
+def test_dial_extreme_holds_bound_button(qapp):
+    cfg = AppConfig(output_enabled=True)
+    cfg.axes["cam"].invert = False
+    cfg.cam_high_button = "RB"
+    pad = FakePad()
+    gp = GamepadOut(pad=pad, button_map=_BTN_MAP)
+    win = MainWindow(cfg, gamepad=gp, link=FakeLink())
+    # dial physically at max -> 100% -> RB held
+    win.on_raw_axes({"lv": 1024, "lh": 1024, "rv": 1024, "rh": 1024, "cam": 1684})
+    assert ("press", "RB") in pad.calls
+    # dial back to center -> RB released
+    win.on_raw_axes({"lv": 1024, "lh": 1024, "rv": 1024, "rh": 1024, "cam": 1024})
+    assert ("release", "RB") in pad.calls
+
+
+def test_no_button_held_when_unbound(qapp):
+    cfg = AppConfig(output_enabled=True)
+    cfg.axes["cam"].invert = False
+    pad = FakePad()
+    gp = GamepadOut(pad=pad, button_map=_BTN_MAP)
+    win = MainWindow(cfg, gamepad=gp, link=FakeLink())
+    win.on_raw_axes({"lv": 1024, "lh": 1024, "rv": 1024, "rh": 1024, "cam": 1684})
+    assert not any(c[0] == "press" for c in pad.calls)
+
+
+def test_cam_bind_dropdown_updates_config(qapp, monkeypatch):
+    monkeypatch.setattr("dji_xbox.main_window.save", lambda *a, **k: None)
+    win = MainWindow(AppConfig(), gamepad=GamepadOut(pad=FakePad()), link=FakeLink())
+    win.cam_high_combo.setCurrentText("LB")
+    assert win.config.cam_high_button == "LB"
+    win.cam_high_combo.setCurrentText("None")
+    assert win.config.cam_high_button is None
 
 
 def test_reset_resets_range_slider(qapp, monkeypatch):

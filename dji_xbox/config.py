@@ -24,6 +24,8 @@ class AppConfig:
     port_hint: str | None = None
     output_enabled: bool = True
     log_to_file: bool = False
+    cam_low_button: str | None = None    # Xbox button held when dial hits 0%
+    cam_high_button: str | None = None   # Xbox button held when dial hits 100%
     axes: dict = field(default_factory=default_axes)
 
 
@@ -53,6 +55,8 @@ def load(path=DEFAULT_PATH) -> AppConfig:
         port_hint=data.get("port_hint"),
         output_enabled=bool(data.get("output_enabled", True)),
         log_to_file=bool(data.get("log_to_file", False)),
+        cam_low_button=data.get("cam_low_button"),
+        cam_high_button=data.get("cam_high_button"),
         axes=axes,
     )
 
@@ -62,6 +66,8 @@ def save(config: AppConfig, path=DEFAULT_PATH) -> None:
         "port_hint": config.port_hint,
         "output_enabled": config.output_enabled,
         "log_to_file": config.log_to_file,
+        "cam_low_button": config.cam_low_button,
+        "cam_high_button": config.cam_high_button,
         "axes": {name: asdict(cal) for name, cal in config.axes.items()},
     }
     with open(path, "w") as f:

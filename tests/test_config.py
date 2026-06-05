@@ -34,3 +34,18 @@ def test_save_then_load_round_trips(tmp_path):
     assert loaded.axes["rv"].deadzone == 0.12
     assert loaded.axes["rv"].trim == 7
     assert loaded.axes["rv"].range == 1.25
+
+
+def test_cam_button_bindings_round_trip(tmp_path):
+    p = tmp_path / "config.json"
+    cfg = AppConfig(cam_low_button="LB", cam_high_button="RB")
+    save(cfg, p)
+    loaded = load(p)
+    assert loaded.cam_low_button == "LB"
+    assert loaded.cam_high_button == "RB"
+
+
+def test_cam_button_bindings_default_none():
+    cfg = AppConfig()
+    assert cfg.cam_low_button is None
+    assert cfg.cam_high_button is None

@@ -14,6 +14,12 @@ class FakePad:
     def right_trigger(self, value):
         self.calls.append(("trigger", value))
 
+    def press_button(self, button):
+        self.calls.append(("press", button))
+
+    def release_button(self, button):
+        self.calls.append(("release", button))
+
     def update(self):
         self.calls.append(("update",))
 
@@ -34,3 +40,24 @@ def test_send_forwards_axes_and_trigger_then_updates():
     assert ("right", -400, 300) in pad.calls     # x=rh, y=rv
     assert ("trigger", 128) in pad.calls
     assert pad.calls[-1] == ("update",)
+
+
+def test_held_button_pressed_once_then_released():
+    pad = FakePad()
+    out = GamepadOut(pad=pad, button_map={"RB": "RB"})
+    out.open()
+    out.send(0, 0, 0, 0, 0, buttons=["RB"])
+    assert ("press", "RB") in pad.calls
+    out.send(0, 0, 0, 0, 0, buttons=["RB"])      # still held -> not pressed again
+    assert pad.calls.count(("press", "RB")) == 1
+    out.send(0, 0, 0, 0, 0, buttons=[])          # left the zone -> released
+    assert ("release", "RB") in pad.calls
+
+
+def test_neutralize_releases_held_buttons():
+    pad = FakePad()
+    out = GamepadOut(pad=pad, button_map={"A": "A"})
+    out.open()
+    out.send(0, 0, 0, 0, 0, buttons=["A"])
+    out.neutralize()
+    assert ("release", "A") in pad.calls

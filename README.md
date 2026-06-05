@@ -40,9 +40,10 @@ python app.py
 | | Feature |
 |---|---|
 | 🔌 | **Auto-detect + auto-reconnect** — scans ports on its own, identifies the DJI remote by probing, connects automatically, and reconnects if the cable is unplugged. No need to type a COM port. |
-| 🕹️ | **Live analog visualization** — two sticks (left Throttle/Yaw, right Pitch/Roll) + a camera-dial bar. The dot follows the **physical** stick position, so you can verify the reading is correct. |
-| 🔄 | **Per-axis invert** — toggle right in the UI. Invert only affects the game output; the display still shows the physical direction. |
+| 🕹️ | **Live analog visualization** — two sticks (left Throttle/Yaw, right Pitch/Roll) + a camera-dial bar. The dot tracks the stick in real time (constrained to the circular pad) so you can verify the reading. |
+| 🔄 | **Per-axis invert** — toggle right in the UI. Both the display and the game output flip immediately — no save needed. |
 | 🎯 | **Full calibration** — deadzone, center trim, and range/sensitivity per axis. Auto-saved to `config.json`. Includes a Reset button. |
+| 🔘 | **Dial → button binding** — bind the camera dial's 0% and 100% extremes to Xbox buttons, held while the dial sits at that end. |
 | 🎮 | **Output ON/OFF** — stop/resume sending to the virtual gamepad without closing the app. |
 | 📊 | **Live log + lag detection** — Hz/interval indicator, an automatic warning when the inter-packet gap spikes (lag) plus a dropped-packet estimate, and Pause / Clear / Save-to-file buttons. |
 
@@ -75,7 +76,7 @@ python app.py
 ## 🖥️ UI Guide
 
 - **Header** — title, a `⟳ Hz · interval ms · drop` indicator, connection status, and an **Output: ON/OFF** button.
-- **Left panel (Live)** — two analog pads (the dot tracks the physical stick) + numeric values, plus a **camera dial → Right Trigger** bar.
+- **Left panel (Live)** — two analog pads (the dot tracks the stick, constrained to the circle) + numeric values, plus a **camera dial → Right Trigger** bar. Below it, two dropdowns bind the dial's **0% / 100%** extremes to Xbox buttons (held while the dial is at that end).
 - **Right panel (Calibration)** — per axis: **Invert** (checkbox), **Deadzone** (0–30%), **Trim** (shift the center point), **Range** (0.5×–1.5× sensitivity). Everything auto-saves. There's a **Reset** button.
 - **Bottom panel (Log)** — live log (scan/connect, rate, lag warnings, reconnect). **Pause**, **Clear**, and **💾 Save to file** (`session.log`) buttons.
 

@@ -4,14 +4,14 @@ import time
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
-    QGridLayout, QCheckBox, QSlider, QPlainTextEdit, QProgressBar,
+    QGridLayout, QCheckBox, QSlider, QPlainTextEdit, QProgressBar, QComboBox,
 )
 from PySide6.QtCore import Qt
 
 from .widgets.analog_stick import AnalogStick
 from .mapping import convert_axis, convert_camera
 from .config import save, AXIS_NAMES, default_axes
-from .gamepad_out import GamepadOut
+from .gamepad_out import GamepadOut, BUTTON_NAMES
 from .serial_link import SerialLink
 from .logger import LogBuffer
 
@@ -19,6 +19,7 @@ AXIS_LABELS = {"lv": "L-Vert", "lh": "L-Horz", "rv": "R-Vert",
                "rh": "R-Horz", "cam": "Camera"}
 
 _LOG_FILE = "session.log"
+CAM_EDGE_PCT = 5   # dial within 5% of 0/100 counts as "at the extreme"
 
 
 class MainWindow(QMainWindow):
@@ -101,6 +102,25 @@ class MainWindow(QMainWindow):
         self.cam_bar = QProgressBar()
         self.cam_bar.setRange(0, 255)
         live.addWidget(self.cam_bar)
+
+        # Bind the dial extremes (0% / 100%) to Xbox buttons, held while there.
+        bind_row = QHBoxLayout()
+        bind_row.addWidget(QLabel("Dial min (0%) →"))
+        self.cam_low_combo = QComboBox()
+        self.cam_low_combo.addItems(["None"] + BUTTON_NAMES)
+        self.cam_low_combo.setCurrentText(self.config.cam_low_button or "None")
+        self.cam_low_combo.currentTextChanged.connect(
+            lambda t: self._set_cam_bind("low", t))
+        bind_row.addWidget(self.cam_low_combo)
+        bind_row.addWidget(QLabel("max (100%) →"))
+        self.cam_high_combo = QComboBox()
+        self.cam_high_combo.addItems(["None"] + BUTTON_NAMES)
+        self.cam_high_combo.setCurrentText(self.config.cam_high_button or "None")
+        self.cam_high_combo.currentTextChanged.connect(
+            lambda t: self._set_cam_bind("high", t))
+        bind_row.addWidget(self.cam_high_combo)
+        bind_row.addStretch()
+        live.addLayout(bind_row)
         body.addLayout(live, 3)
 
         # calibration grid
@@ -190,8 +210,19 @@ class MainWindow(QMainWindow):
         self.right_vals.setText(f"H {vals['rh']:+d}  V {vals['rv']:+d}")
         self.cam_bar.setValue(trig)
 
+        buttons = self._dial_buttons(trig)
         if self.config.output_enabled and self._gamepad_ready:
-            self.gamepad.send(vals["lv"], vals["lh"], vals["rv"], vals["rh"], trig)
+            self.gamepad.send(vals["lv"], vals["lh"], vals["rv"], vals["rh"], trig,
+                              buttons=buttons)
+
+    def _dial_buttons(self, trig: int):
+        """Buttons to hold based on where the camera dial sits (0% / 100%)."""
+        pct = trig / 255 * 100
+        if self.config.cam_low_button and pct <= CAM_EDGE_PCT:
+            return [self.config.cam_low_button]
+        if self.config.cam_high_button and pct >= 100 - CAM_EDGE_PCT:
+            return [self.config.cam_high_button]
+        return []
 
     def on_status(self, state: str, port: str):
         text = {"searching": "Searching for remote…",
@@ -225,6 +256,14 @@ class MainWindow(QMainWindow):
         self.config.axes[name].range = value / 100.0
         self._save()
 
+    def _set_cam_bind(self, which, text):
+        value = None if text == "None" else text
+        if which == "low":
+            self.config.cam_low_button = value
+        else:
+            self.config.cam_high_button = value
+        self._save()
+
     def _reset_calibration(self):
         self.config.axes = default_axes()
         for name in AXIS_NAMES:
@@ -245,6 +284,8 @@ class MainWindow(QMainWindow):
         self.config.output_enabled = self.output_btn.isChecked()
         self.output_btn.setText("Output: ON" if self.config.output_enabled
                                 else "Output: OFF")
+        if not self.config.output_enabled and self._gamepad_ready:
+            self.gamepad.neutralize()   # release any held buttons + center sticks
         self._save()
 
     def _clear_log(self):
