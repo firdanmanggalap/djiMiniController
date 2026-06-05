@@ -76,8 +76,8 @@ def open_port(args):
 
 
 def capture_value_sets(s, seconds):
-    """For each non-stick byte, collect every value it takes during `seconds`."""
-    sets = {i: set() for i in range(PACKET_LEN) if i not in AXIS_BYTES}
+    """For every byte, collect each value it takes during `seconds`."""
+    sets = {i: set() for i in range(PACKET_LEN)}
     end = time.time() + seconds
     frames = 0
     while time.time() < end:
@@ -92,7 +92,8 @@ def capture_value_sets(s, seconds):
 
 
 def probe_button(label, candidates, s):
-    input(f"\n>> When you press Enter, PRESS the {label} button repeatedly for ~4s... ")
+    input(f"\n>> When you press Enter, PRESS the {label} button repeatedly for ~4s "
+          f"(DON'T touch the sticks)... ")
     held, frames = capture_value_sets(s, 4.0)
     hits = []
     for i, base_vals in candidates.items():
@@ -104,8 +105,9 @@ def probe_button(label, candidates, s):
             b = min(base_vals)
             nv = " ".join(f"{v:#04x}" for v in sorted(new_vals))
             masks = " ".join(f"{(b ^ v):#04x}" for v in sorted(new_vals))
+            tag = "  (axis byte — could be stick noise)" if i in AXIS_BYTES else ""
             print(f"   {label}: byte[{i}]  base {b:#04x}  ->  new {nv}  "
-                  f"(mask {masks})   [{frames} frames]")
+                  f"(mask {masks})   [{frames} frames]{tag}")
     else:
         print(f"   {label}: no new byte value seen while pressing. [{frames} frames]")
     return hits
